@@ -1,0 +1,9 @@
+{
+  "name": "@poker/shared",
+  "version": "0.0.1",
+  "main": "dist/types.js",
+  "types": "dist/types.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}
