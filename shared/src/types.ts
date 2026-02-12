@@ -15,6 +15,18 @@ export type PlayerPublic = {
   folded: boolean;
 };
 
+export type AllowedActions = {
+  canFold: boolean;
+  canCheck: boolean;
+  canCall: boolean;
+  canBet: boolean;
+  canRaise: boolean;
+
+  toCall: number;      // 需要跟注多少（0 表示可 check）
+  minBet: number;      // 最小 bet
+  minRaiseTo: number;  // 最小加注到多少（raise-to）
+};
+
 export type PlayerPrivate = {
   hole: Card[]; // 2
 };
@@ -51,6 +63,18 @@ export type GameView = {
 
   // UI 需要：行动提示/倒计时等可以后加
   message?: string;
+
+  betting: {
+    street: Stage;          // PREFLOP/FLOP/TURN/RIVER
+    pot: number;            // 你已有 pot 也可保留一个，这里统一用 view.pot
+    currentBet: number;     // 本街最高投入（raise-to）
+    yourInvested: number;   // 你本街已投入
+    oppInvested: number;    // 对手本街已投入
+    actingSeat: Seat | null;// 轮到谁
+    allowed: AllowedActions;// 你能按哪些按钮
+    sb: number;
+    bb: number;
+  };
 };
 
 export type ClientHello = {

@@ -9,6 +9,16 @@ export type PlayerPublic = {
     stack: number;
     folded: boolean;
 };
+export type AllowedActions = {
+    canFold: boolean;
+    canCheck: boolean;
+    canCall: boolean;
+    canBet: boolean;
+    canRaise: boolean;
+    toCall: number;
+    minBet: number;
+    minRaiseTo: number;
+};
 export type PlayerPrivate = {
     hole: Card[];
 };
@@ -36,6 +46,17 @@ export type GameView = {
         winner: "A" | "B" | "TIE";
     };
     message?: string;
+    betting: {
+        street: Stage;
+        pot: number;
+        currentBet: number;
+        yourInvested: number;
+        oppInvested: number;
+        actingSeat: Seat | null;
+        allowed: AllowedActions;
+        sb: number;
+        bb: number;
+    };
 };
 export type ClientHello = {
     type: "HELLO";
