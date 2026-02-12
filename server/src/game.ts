@@ -2,6 +2,10 @@ import type { Card, GameView, HandResult, Seat, ServerEvent } from "@poker/share
 import { createInitialState, type GameState } from "./state.js";
 import { makeDeck, shuffle } from "./utils.js";
 
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { Hand } = require("pokersolver");
+
 // 单房间全局状态
 export const state: GameState = createInitialState();
 
@@ -77,22 +81,44 @@ function bettingRoundComplete(): boolean {
   return equal && acted;
 }
 
+function toSolverCard(c: Card): string {
+  // 假设你的 Card 形如 "AS" "TD" "7H"（rank + suit）
+  const r = c[0];              // A K Q J T 9..2
+  const s = c[1].toLowerCase(); // s h d c
+  return `${r}${s}`;
+}
+
+function fromSolverCard(cardObj: any): Card {
+  // pokersolver 的 hand.cards 里通常是对象：{ value: "A", suit: "s" } 之类
+  const r = String(cardObj.value).toUpperCase();
+  const s = String(cardObj.suit).toUpperCase(); // S H D C
+  return `${r}${s}` as Card;
+}
+
 
 // ===== 牌型评估占位：你后面接真实库（输出 bestFive + name + rankValue）=====
-function evalHoldem(_hole: Card[], _community: Card[]): HandResult {
-  // MVP：先返回占位，bestFive先随便取（不用于胜负真实判断）
-  const all = [..._hole, ..._community];
+function evalHoldem(hole: Card[], community: Card[]): HandResult {
+  const all = [...hole, ...community].map(toSolverCard);
+  const solved = Hand.solve(all);
+
+  const bestFive: Card[] = (solved.cards ?? []).map(fromSolverCard);
+
+  // 把 solved 挂在结果上，给 compareHands 用（只在 server 内部用）
   return {
-    name: "TBD",
-    bestFive: all.slice(0, 5),
-    rankValue: 0
-  };
+    name: solved.descr ?? "Unknown",
+    bestFive,
+    rankValue: Number(solved.rank ?? 0),
+    ...( { __solved: solved } as any )
+  } as any;
 }
 
 function compareHands(a: HandResult, b: HandResult): "A" | "B" | "TIE" {
-  if (a.rankValue > b.rankValue) return "A";
-  if (b.rankValue > a.rankValue) return "B";
-  return "TIE";
+  const ha = (a as any).__solved;
+  const hb = (b as any).__solved;
+
+  const winners = Hand.winners([ha, hb]);
+  if (winners.length === 2) return "TIE";
+  return winners[0] === ha ? "A" : "B";
 }
 
 // ===== 连接入座逻辑 =====
