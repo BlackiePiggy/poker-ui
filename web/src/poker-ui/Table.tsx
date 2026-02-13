@@ -5,6 +5,17 @@ import type { GameView, Card as CardT } from "@poker/shared/dist/types.js";
 export function Table({ view }: { view: GameView }) {
   const showdown = view.showdown;
 
+  const betting = (view as any).betting as
+  | {
+      yourInvested: number;
+      oppInvested: number;
+      actingSeat: "A" | "B" | null;
+      currentBet: number;
+      allowed: { toCall: number };
+    }
+  | undefined;
+
+
   // 高亮：示例仍然高亮胜者 bestFive（你可改成双方都高亮）
   const bestSet = new Set<CardT>();
   if (showdown) {
@@ -18,7 +29,7 @@ export function Table({ view }: { view: GameView }) {
   }
 
   const youSeat = view.you.seat;
-  const oppSeat = youSeat === "A" ? "B" : "A";
+  const oppSeat = (youSeat === "A" ? "B" : "A") as "A" | "B";
 
   return (
     <div style={{ maxWidth: 980, margin: "24px auto", padding: "0 12px" }}>
@@ -121,6 +132,28 @@ export function Table({ view }: { view: GameView }) {
                 </div>
             </div>
 
+            <div
+                style={{
+                    position: "absolute",
+                    left: 16,
+                    top: 58, // 在 Opponent 标题下面
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    lineHeight: 1.25,
+                    padding: "6px 10px",
+                    borderRadius: 10,
+                    background: "rgba(0,0,0,0.25)",
+                    backdropFilter: "blur(4px)",
+                    textShadow: "0 2px 8px rgba(0,0,0,0.35)",
+                    pointerEvents: "none",
+                }}
+                >
+                <div>Stack: {view.players[oppSeat].stack}</div>
+                <div>In: {betting?.oppInvested ?? 0}</div>
+            </div>
+
+
             {/* 两张牌永远居中 */}
             <div
                 style={{
@@ -173,6 +206,7 @@ export function Table({ view }: { view: GameView }) {
 
             {/* Pot 放在正中央上方（不影响居中） */}
             <div
+                id="pot-anchor"
                 style={{
                 position: "absolute",
                 top: 12,
@@ -200,12 +234,40 @@ export function Table({ view }: { view: GameView }) {
             }}
             >
             {/* 信息放左下（更像真实牌桌） */}
-            <div style={{ position: "absolute", left: 16, bottom: 14, color: "#fff" }}>
-                <div style={{ fontWeight: 900 }}>You</div>
+            <div style={{ position: "absolute", left: 16, top: 14, color: "#fff" }}>
+                <div style={{ fontWeight: 800 }}>You</div>
                 <div style={{ fontSize: 13, opacity: 0.9 }}>
-                Dealer: {view.dealer ?? "-"}
+                    Dealer: {view.dealer ?? "-"}
                 </div>
             </div>
+
+            <div
+                style={{
+                    position: "absolute",
+                    left: 16,
+                    bottom: 14,
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    lineHeight: 1.25,
+                    padding: "6px 10px",
+                    borderRadius: 10,
+                    background: "rgba(0,0,0,0.25)",
+                    backdropFilter: "blur(4px)",
+                    textShadow: "0 2px 8px rgba(0,0,0,0.35)",
+                    pointerEvents: "none",
+                }}
+                >
+                <div>Stack: {youSeat ? view.players[youSeat].stack : "-"}</div>
+                <div>In: {betting?.yourInvested ?? 0}</div>
+
+                {betting && betting.actingSeat === youSeat && (
+                    <div style={{ marginTop: 4, opacity: 0.95 }}>
+                    To Call: {betting.allowed?.toCall ?? 0} / Bet: {betting.currentBet}
+                    </div>
+                )}
+            </div>
+
 
             {/* 两张手牌永远居中 */}
             <div
@@ -233,7 +295,7 @@ export function Table({ view }: { view: GameView }) {
               position: "absolute",
               right: 18,
               bottom: 18,
-              width: 320,
+              width: 200,
               padding: 12,
               borderRadius: 14,
               background: "rgba(0,0,0,0.35)",

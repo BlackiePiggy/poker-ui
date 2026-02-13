@@ -292,6 +292,41 @@ export function tryStartGame() {
   state.acting = firstToAct("PREFLOP");
 }
 
+function settleShowdown() {
+  const aRes = evalHoldem(state.players.A.hole, state.community);
+  const bRes = evalHoldem(state.players.B.hole, state.community);
+  const winner = compareHands(aRes, bRes);
+
+  if (winner === "A") state.players.A.stack += state.pot;
+  else if (winner === "B") state.players.B.stack += state.pot;
+  else {
+    // 平分，奇数筹码给 B（或按按钮位规则，你也可改）
+    const half = Math.floor(state.pot / 2);
+    state.players.A.stack += half;
+    state.players.B.stack += (state.pot - half);
+  }
+
+  state.pot = 0;
+}
+
+function finishHand() {
+  // 一局结束：准备下一局（但不自动开，回到 WAITING）
+  state.stage = "WAITING";
+  state.acting = null;
+
+  // 按钮轮换
+  state.dealer = state.dealer ? other(state.dealer) : "A";
+
+  // 下一局需要两人重新 READY（更清晰）
+  state.players.A.ready = false;
+  state.players.B.ready = false;
+
+  // 清理牌局，但不要动 stack
+  resetHand();
+  resetStreetFlags();
+}
+
+
 
 function advanceStreet() {
   // 把本街投入推入底池
@@ -313,6 +348,9 @@ function advanceStreet() {
     case "RIVER":
       state.stage = "SHOWDOWN";
       state.acting = null;
+      // ✅ 结算筹码
+      settleShowdown();
+
       return;
   }
 
@@ -330,6 +368,10 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
 
   if (action.type === "READY") {
     state.players[seat].ready = true;
+    // 如果刚才停在 SHOWDOWN，先收尾再等两人 READY
+    if (state.stage === "SHOWDOWN") {
+        finishHand();
+    }
     tryStartGame();
     return null;
   }
@@ -352,19 +394,12 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
   if (action.type === "FOLD") {
     me.folded = true;
     markActed();
-    // 弃牌：对手直接赢下底池 + 本街投入
+
     commitStreetBetsToPot();
     opp.stack += state.pot;
     state.pot = 0;
 
-    // 下一手
-    state.dealer = other(state.dealer!);
-    resetHand();
-    resetStreetFlags();
-    dealHole();
-    state.stage = "PREFLOP";
-    postBlinds();
-    state.acting = firstToAct("PREFLOP");
+    finishHand(); // ✅ 统一
     return null;
   }
 
@@ -462,6 +497,58 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
     state.acting = other(seat);
     return null;
   }
+
+  if (action.type === "ALL_IN") {
+    // 直接把剩余 stack 全部投入本街
+    const all = me.stack;
+    if (all <= 0) return { type: "ERROR", message: "你没有筹码了" } as const;
+
+    me.stack = 0;
+    me.streetBet += all;
+    me.allIn = true;
+
+    // 现在判断这是：call / bet / raise
+    if (state.currentBet === 0) {
+        // 等价于 BET 到 me.streetBet
+        state.currentBet = me.streetBet;
+        state.minRaiseTo = state.currentBet * 2; // 简化
+        state.lastAggressor = seat;
+
+        state.actedThisStreet[seat] = true;
+        state.actedThisStreet[other(seat)] = false;
+        state.acting = other(seat);
+        return null;
+    } else {
+        const prev = state.currentBet;
+
+        if (me.streetBet > prev) {
+        // 等价于 RAISE 到 me.streetBet（可能是加注不足的全下）
+        state.currentBet = me.streetBet;
+        state.minRaiseTo = state.currentBet + (state.currentBet - opp.streetBet); // 简化
+        state.lastAggressor = seat;
+
+        state.actedThisStreet[seat] = true;
+        state.actedThisStreet[other(seat)] = false;
+        state.acting = other(seat);
+        return null;
+        } else {
+        // 等价于 CALL（投入不足也算 all-in call）
+        state.actedThisStreet[seat] = true;
+        state.acting = other(seat);
+
+        if (bettingRoundComplete()) {
+            // 两人 all-in 就自动跑完公共牌到 SHOWDOWN
+            if (state.players.A.allIn && state.players.B.allIn) {
+            while (state.stage !== "SHOWDOWN") advanceStreet();
+            } else {
+            advanceStreet();
+            }
+        }
+        return null;
+        }
+    }
+  }
+
 
   return { type: "ERROR", message: "未知动作" } as const;
 }

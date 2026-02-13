@@ -1,0 +1,43 @@
+/* 按钮按下反馈：缩小 + 阴影变化 + 轻微亮一下 */
+.pbtn {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #333;
+  background: rgba(255,255,255,0.92);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+  transition: transform 80ms ease, box-shadow 120ms ease, filter 120ms ease;
+  cursor: pointer;
+}
+.pbtn:hover {
+  filter: brightness(1.03);
+}
+.pbtn:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.22);
+}
+
+/* 飞行筹码：一个小圆片（可换成图片） */
+.chip-fly {
+  width: 20px;
+  height: 20px;
+  background: url("../public/chips/chips.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+/* 用 CSS 变量控制位移 */
+@keyframes chipFly {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9) rotate(0deg);
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)))
+               scale(0.6)
+               rotate(360deg);
+  }
+}
