@@ -1,3 +1,4 @@
+import type { Request, Response } from "express";
 import express from "express";
 import cors from "cors";
 import { createServer } from "http";
@@ -9,7 +10,7 @@ import { assignSeat, handleAction, makeView, setConnected, state } from "./game.
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {

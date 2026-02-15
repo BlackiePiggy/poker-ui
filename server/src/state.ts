@@ -35,6 +35,7 @@ export type GameState = {
   lastAggressor: Seat | null;
 
   actedThisStreet: Record<Seat, boolean>;
+  lastRaiseSize: number;
 };
 
 
@@ -56,6 +57,7 @@ export function createInitialState(): GameState {
     acting: null,
     lastAggressor: null,
     actedThisStreet: { A: false, B: false },
+    lastRaiseSize: 0,
 
     players: {
         A: {

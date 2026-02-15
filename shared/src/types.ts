@@ -13,6 +13,7 @@ export type PlayerPublic = {
   connected: boolean;
   stack: number;
   folded: boolean;
+  ready: boolean;
 };
 
 export type AllowedActions = {
