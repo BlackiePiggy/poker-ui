@@ -70,6 +70,60 @@ export function Table({ view }: { view: GameView }) {
           }}
         />
 
+        {/* === Opponent 筹码 + 信息（右上外侧）=== */}
+        <div
+        style={{
+            position: "absolute",
+            top: 140,
+            right: 28,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            pointerEvents: "none",
+        }}
+        >
+        <div id="chips-opp" className="chip-stack-grid">
+            {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="chip-stack" />
+            ))}
+        </div>
+
+        <div className="stack-info">
+            <div>Stack: {view.players[oppSeat].stack}</div>
+            <div>In: {betting?.oppInvested ?? 0}</div>
+        </div>
+        </div>
+
+        {/* === You 筹码 + 信息（左下外侧）=== */}
+        <div
+        style={{
+            position: "absolute",
+            bottom: 120,
+            left: 28,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            pointerEvents: "none",
+        }}
+        >
+        <div id="chips-you" className="chip-stack-grid">
+            {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="chip-stack" />
+            ))}
+        </div>
+
+        <div className="stack-info">
+            <div>Stack: {youSeat ? view.players[youSeat].stack : "-"}</div>
+            <div>In: {betting?.yourInvested ?? 0}</div>
+
+            {betting && betting.actingSeat === youSeat && (
+            <div style={{ marginTop: 4, opacity: 0.95 }}>
+                To Call: {betting.allowed?.toCall ?? 0} / Bet: {betting.currentBet}
+            </div>
+            )}
+        </div>
+        </div>
+
         {/* 顶部状态栏 */}
         <div
           style={{
@@ -130,27 +184,6 @@ export function Table({ view }: { view: GameView }) {
                 A: {view.players.A.connected ? "在线" : "离线"} | B:{" "}
                 {view.players.B.connected ? "在线" : "离线"}
                 </div>
-            </div>
-
-            <div
-                style={{
-                    position: "absolute",
-                    left: 16,
-                    top: 58, // 在 Opponent 标题下面
-                    color: "#fff",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    lineHeight: 1.25,
-                    padding: "6px 10px",
-                    borderRadius: 10,
-                    background: "rgba(0,0,0,0.25)",
-                    backdropFilter: "blur(4px)",
-                    textShadow: "0 2px 8px rgba(0,0,0,0.35)",
-                    pointerEvents: "none",
-                }}
-                >
-                <div>Stack: {view.players[oppSeat].stack}</div>
-                <div>In: {betting?.oppInvested ?? 0}</div>
             </div>
 
 
@@ -239,33 +272,6 @@ export function Table({ view }: { view: GameView }) {
                 <div style={{ fontSize: 13, opacity: 0.9 }}>
                     Dealer: {view.dealer ?? "-"}
                 </div>
-            </div>
-
-            <div
-                style={{
-                    position: "absolute",
-                    left: 16,
-                    bottom: 14,
-                    color: "#fff",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    lineHeight: 1.25,
-                    padding: "6px 10px",
-                    borderRadius: 10,
-                    background: "rgba(0,0,0,0.25)",
-                    backdropFilter: "blur(4px)",
-                    textShadow: "0 2px 8px rgba(0,0,0,0.35)",
-                    pointerEvents: "none",
-                }}
-                >
-                <div>Stack: {youSeat ? view.players[youSeat].stack : "-"}</div>
-                <div>In: {betting?.yourInvested ?? 0}</div>
-
-                {betting && betting.actingSeat === youSeat && (
-                    <div style={{ marginTop: 4, opacity: 0.95 }}>
-                    To Call: {betting.allowed?.toCall ?? 0} / Bet: {betting.currentBet}
-                    </div>
-                )}
             </div>
 
 

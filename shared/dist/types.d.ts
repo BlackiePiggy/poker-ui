@@ -8,6 +8,7 @@ export type PlayerPublic = {
     connected: boolean;
     stack: number;
     folded: boolean;
+    ready: boolean;   // ✅ 加这一行
 };
 export type AllowedActions = {
     canFold: boolean;

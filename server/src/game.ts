@@ -26,6 +26,7 @@ function resetStreetFlags() {
   state.currentBet = 0;
   state.minRaiseTo = 0;
   state.lastAggressor = null;
+  state.lastRaiseSize = 0;  // ✅ 添加
 }
 
 function commitStreetBetsToPot() {
@@ -35,6 +36,7 @@ function commitStreetBetsToPot() {
   state.currentBet = 0;
   state.minRaiseTo = 0;
   state.lastAggressor = null;
+  state.lastRaiseSize = 0;  // ✅ 添加
   state.actedThisStreet = { A: false, B: false };
 }
 
@@ -52,13 +54,20 @@ function postBlinds() {
   state.players[sbSeat].streetBet = sbAmt;
   state.players[bbSeat].streetBet = bbAmt;
 
+  // ✅ 修复：处理筹码不足的情况
+  if (sbAmt === 0 || bbAmt === 0) {
+    // 有人无法支付盲注，直接全下
+    state.players[sbSeat].allIn = sbAmt > 0 && state.players[sbSeat].stack === 0;
+    state.players[bbSeat].allIn = bbAmt > 0 && state.players[bbSeat].stack === 0;
+  }
+
   state.currentBet = bbAmt;
-  // 最小加注到：bb + (bb - sb) 在 HU preflop 也可简化为 bb*2
-  state.minRaiseTo = bbAmt + (bbAmt - sbAmt);
-  if (state.minRaiseTo < bbAmt * 2) state.minRaiseTo = bbAmt * 2;
+  // ✅ 修复：minRaiseTo 应该基于实际的加注差额
+  state.lastRaiseSize = bbAmt - sbAmt;
+  state.minRaiseTo = bbAmt + state.lastRaiseSize;  // bb + (bb - sb)
 
   state.actedThisStreet = { A: false, B: false };
-  state.lastAggressor = bbSeat; // 大盲视为已“建立当前Bet”
+  state.lastAggressor = bbSeat; // 大盲视为已"建立当前Bet"
 }
 
 function firstToAct(stage: string): Seat {
@@ -74,6 +83,13 @@ function bettingRoundComplete(): boolean {
 
   // 若两人都 all-in，下注轮也结束（后面直接自动 runout）
   if (state.players.A.allIn && state.players.B.allIn) return true;
+
+  // ✅ 添加：单人 all-in 且对手已匹配投入
+  if (state.players.A.allIn || state.players.B.allIn) {
+    const equal = state.players.A.streetBet === state.players.B.streetBet;
+    const bothActed = state.actedThisStreet.A && state.actedThisStreet.B;
+    if (equal && bothActed) return true;
+  }
 
   // 两人本街投入相等，并且两人都至少行动过一次
   const equal = state.players.A.streetBet === state.players.B.streetBet;
@@ -103,22 +119,18 @@ function evalHoldem(hole: Card[], community: Card[]): HandResult {
 
   const bestFive: Card[] = (solved.cards ?? []).map(fromSolverCard);
 
-  // 把 solved 挂在结果上，给 compareHands 用（只在 server 内部用）
   return {
     name: solved.descr ?? "Unknown",
     bestFive,
     rankValue: Number(solved.rank ?? 0),
-    ...( { __solved: solved } as any )
-  } as any;
+  };
 }
 
-function compareHands(a: HandResult, b: HandResult): "A" | "B" | "TIE" {
-  const ha = (a as any).__solved;
-  const hb = (b as any).__solved;
 
-  const winners = Hand.winners([ha, hb]);
-  if (winners.length === 2) return "TIE";
-  return winners[0] === ha ? "A" : "B";
+function compareHands(a: HandResult, b: HandResult): "A" | "B" | "TIE" {
+  if (a.rankValue > b.rankValue) return "A";
+  if (b.rankValue > a.rankValue) return "B";
+  return "TIE";
 }
 
 // ===== 连接入座逻辑 =====
@@ -159,13 +171,15 @@ export function makeView(forSeat: Seat | null): GameView {
         seat: "A",
         connected: state.players.A.connected,
         stack: state.players.A.stack,
-        folded: state.players.A.folded
+        folded: state.players.A.folded,
+        ready: state.players.A.ready,
       },
       B: {
         seat: "B",
         connected: state.players.B.connected,
         stack: state.players.B.stack,
-        folded: state.players.B.folded
+        folded: state.players.B.folded,
+        ready: state.players.B.ready,
       }
     },
     yourHole: youHole,
@@ -287,6 +301,9 @@ export function tryStartGame() {
 
   state.stage = "PREFLOP";
 
+  state.players.A.ready = false;
+  state.players.B.ready = false;
+
   // 扣盲注并设置行动者
   postBlinds();
   state.acting = firstToAct("PREFLOP");
@@ -297,13 +314,19 @@ function settleShowdown() {
   const bRes = evalHoldem(state.players.B.hole, state.community);
   const winner = compareHands(aRes, bRes);
 
-  if (winner === "A") state.players.A.stack += state.pot;
-  else if (winner === "B") state.players.B.stack += state.pot;
-  else {
-    // 平分，奇数筹码给 B（或按按钮位规则，你也可改）
+  // ✅ 修复：平分底池时奇数筹码给 BB（dealer 的对手）
+  if (winner === "A") {
+    state.players.A.stack += state.pot;
+  } else if (winner === "B") {
+    state.players.B.stack += state.pot;
+  } else {
+    // 平分，奇数筹码给 BB（非 dealer 位）
+    const bbSeat = other(state.dealer!);
     const half = Math.floor(state.pot / 2);
-    state.players.A.stack += half;
-    state.players.B.stack += (state.pot - half);
+    const odd = state.pot - half * 2;
+    
+    state.players.A.stack += (state.dealer === "A" ? half : half + odd);
+    state.players.B.stack += (state.dealer === "B" ? half : half + odd);
   }
 
   state.pot = 0;
@@ -348,9 +371,8 @@ function advanceStreet() {
     case "RIVER":
       state.stage = "SHOWDOWN";
       state.acting = null;
-      // ✅ 结算筹码
       settleShowdown();
-
+      // ✅ 不立即调用 finishHand()，让玩家看到结果后通过 READY 触发
       return;
   }
 
@@ -360,22 +382,34 @@ function advanceStreet() {
   state.currentBet = 0;
   state.minRaiseTo = state.bb; // postflop 最小 bet = bb（简化）
   state.lastAggressor = null;
+  state.lastRaiseSize = 0;  // ✅ 添加
 }
 
 // ===== 客户端动作（MVP）=====
 export function handleAction(seat: Seat | null, action: { type: string; [k: string]: any }) {
   if (!seat) return { type: "ERROR", message: "观战者不能操作" } as const;
 
+  // ✅ 先处理 READY / UNREADY（不受下注阶段限制）
   if (action.type === "READY") {
-    state.players[seat].ready = true;
-    // 如果刚才停在 SHOWDOWN，先收尾再等两人 READY
+    // 如果还停在上一局 SHOWDOWN，先收尾（会重置 ready）
     if (state.stage === "SHOWDOWN") {
-        finishHand();
+      finishHand();
     }
+    // 本次点击作为"下一局准备"
+    state.players[seat].ready = true;
     tryStartGame();
     return null;
   }
 
+  if (action.type === "UNREADY") {
+    if (state.stage !== "WAITING") {
+      return { type: "ERROR", message: "已经开局，不能取消READY" } as const;
+    }
+    state.players[seat].ready = false;
+    return null;
+  }
+
+  // ✅ 再处理下注动作（这些才需要下注阶段校验）
   if (!streetIsBetting(state.stage)) {
     return { type: "ERROR", message: "当前不在下注阶段" } as const;
   }
@@ -399,7 +433,7 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
     opp.stack += state.pot;
     state.pot = 0;
 
-    finishHand(); // ✅ 统一
+    finishHand();
     return null;
   }
 
@@ -409,16 +443,7 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
     state.acting = other(seat);
 
     if (bettingRoundComplete()) {
-      // 两人都 check（或对齐且都行动过）
       advanceStreet();
-      // 若 SHOWDOWN 则停
-      if (state.stage === "SHOWDOWN") {
-        // 结算（暂时用占位评估：先平均分或按 winner）
-        // 你后面接真实 evalHoldem 后再改
-        // 这里先简单平分底池：
-        // （更正确：根据 compareHands 决定）
-        return null;
-      }
     }
     return null;
   }
@@ -457,8 +482,11 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
     me.streetBet += pay;
     if (me.stack === 0) me.allIn = true;
 
+    const prevBet = state.currentBet;  // 之前是 0
     state.currentBet = me.streetBet;
-    state.minRaiseTo = state.currentBet + state.currentBet; // 简化：最小加注到 2x
+    // ✅ 修复：记录加注大小
+    state.lastRaiseSize = state.currentBet - prevBet;
+    state.minRaiseTo = state.currentBet + state.lastRaiseSize;
     state.lastAggressor = seat;
 
     markActed();
@@ -472,8 +500,8 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
   if (action.type === "RAISE") {
     if (state.currentBet === 0) return { type: "ERROR", message: "当前无人下注：应BET或CHECK" } as const;
 
-    const raiseTo = Number(action.amount); // “加注到多少”
-    const minRaiseTo = state.minRaiseTo || (state.currentBet * 2);
+    const raiseTo = Number(action.amount); // "加注到多少"
+    const minRaiseTo = state.minRaiseTo || (state.currentBet + state.bb);
 
     if (raiseTo < minRaiseTo) {
       return { type: "ERROR", message: `最小加注到 ${minRaiseTo}` } as const;
@@ -487,10 +515,19 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
     me.streetBet += pay;
     if (me.stack === 0) me.allIn = true;
 
-    // 如果因为 all-in 导致没达到 raiseTo，这里简化为“加注不足视为call”（严谨规则更复杂）
+    const prevBet = state.currentBet;
     state.currentBet = Math.max(state.currentBet, me.streetBet);
-    state.minRaiseTo = state.currentBet + (state.currentBet - opp.streetBet); // 简化
-    state.lastAggressor = seat;
+    
+    // ✅ 修复：正确计算加注大小和下次最小加注
+    if (me.streetBet >= minRaiseTo) {
+      // 完整加注
+      state.lastRaiseSize = state.currentBet - prevBet;
+      state.minRaiseTo = state.currentBet + state.lastRaiseSize;
+      state.lastAggressor = seat;
+    } else {
+      // 加注不足（all-in 但未达到 minRaiseTo）
+      // minRaiseTo 保持不变，对手可以继续加注
+    }
 
     markActed();
     state.actedThisStreet[other(seat)] = false;
@@ -509,46 +546,59 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
 
     // 现在判断这是：call / bet / raise
     if (state.currentBet === 0) {
-        // 等价于 BET 到 me.streetBet
-        state.currentBet = me.streetBet;
-        state.minRaiseTo = state.currentBet * 2; // 简化
-        state.lastAggressor = seat;
+      // 等价于 BET 到 me.streetBet
+      const prevBet = state.currentBet;
+      state.currentBet = me.streetBet;
+      state.lastRaiseSize = state.currentBet - prevBet;
+      state.minRaiseTo = state.currentBet + state.lastRaiseSize;
+      state.lastAggressor = seat;
 
-        state.actedThisStreet[seat] = true;
-        state.actedThisStreet[other(seat)] = false;
-        state.acting = other(seat);
-        return null;
+      state.actedThisStreet[seat] = true;
+      state.actedThisStreet[other(seat)] = false;
+      state.acting = other(seat);
+      return null;
     } else {
-        const prev = state.currentBet;
+      const prevBet = state.currentBet;
+      const minRaiseTo = state.minRaiseTo || (state.currentBet + state.bb);
 
-        if (me.streetBet > prev) {
-        // 等价于 RAISE 到 me.streetBet（可能是加注不足的全下）
+      if (me.streetBet >= minRaiseTo) {
+        // ✅ 完整加注（全下金额达到最小加注）
         state.currentBet = me.streetBet;
-        state.minRaiseTo = state.currentBet + (state.currentBet - opp.streetBet); // 简化
+        state.lastRaiseSize = state.currentBet - prevBet;
+        state.minRaiseTo = state.currentBet + state.lastRaiseSize;
         state.lastAggressor = seat;
 
         state.actedThisStreet[seat] = true;
         state.actedThisStreet[other(seat)] = false;
         state.acting = other(seat);
         return null;
-        } else {
-        // 等价于 CALL（投入不足也算 all-in call）
+      } else if (me.streetBet > prevBet) {
+        // ✅ 加注不足（全下但未达到 minRaiseTo）
+        state.currentBet = me.streetBet;
+        // minRaiseTo 保持不变，对手仍可以按原规则加注
+        // 不更新 lastAggressor
+
+        state.actedThisStreet[seat] = true;
+        state.actedThisStreet[other(seat)] = false;
+        state.acting = other(seat);
+        return null;
+      } else {
+        // ✅ 等价于 CALL（投入不足也算 all-in call）
         state.actedThisStreet[seat] = true;
         state.acting = other(seat);
 
         if (bettingRoundComplete()) {
-            // 两人 all-in 就自动跑完公共牌到 SHOWDOWN
-            if (state.players.A.allIn && state.players.B.allIn) {
+          // 两人 all-in 就自动跑完公共牌到 SHOWDOWN
+          if (state.players.A.allIn && state.players.B.allIn) {
             while (state.stage !== "SHOWDOWN") advanceStreet();
-            } else {
+          } else {
             advanceStreet();
-            }
+          }
         }
         return null;
-        }
+      }
     }
   }
-
 
   return { type: "ERROR", message: "未知动作" } as const;
 }

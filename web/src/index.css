@@ -16,13 +16,61 @@
   box-shadow: 0 3px 10px rgba(0,0,0,0.22);
 }
 
-/* 飞行筹码：一个小圆片（可换成图片） */
+.pbtn-ready {
+  background: rgba(70, 200, 120, 0.95);
+  border-color: rgba(20, 120, 70, 0.9);
+  color: #083b1f;
+  box-shadow: 0 10px 22px rgba(70, 200, 120, 0.25);
+}
+
+.pbtn-ready:hover {
+  filter: brightness(1.06);
+}
+
+
+/* 2x2 筹码堆容器 */
+.chip-stack-grid{
+  display: grid;
+  grid-template-columns: repeat(2, 22px);
+  grid-auto-rows: 22px;
+  gap: 6px;
+}
+
+/* 单个筹码 */
+.chip-stack {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-image: url("/chips/chips.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+}
+
+/* Stack/In 信息块（放筹码旁边） */
+.stack-info {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.25);
+  backdrop-filter: blur(4px);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  pointer-events: none;
+}
+
 .chip-fly {
   width: 20px;
   height: 20px;
-  background: url("../public/chips/chips.png");
+  position: absolute;              /* ✅ 必须：否则 left/top 不生效 */
+  background-image: url("/chips/chips.png");
   background-size: contain;
   background-repeat: no-repeat;
+  background-position: center;
+  animation: chipFly 520ms ease-out forwards;  /* ✅ 必须：否则不会飞 */
 }
 
 /* 用 CSS 变量控制位移 */
