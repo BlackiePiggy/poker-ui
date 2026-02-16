@@ -11,6 +11,14 @@ function other(seat) {
 function streetIsBetting(stage) {
     return stage === "PREFLOP" || stage === "FLOP" || stage === "TURN" || stage === "RIVER";
 }
+function winnerBySolver(holeA, holeB, community) {
+    const a = Hand.solve([...holeA, ...community].map(toSolverCard));
+    const b = Hand.solve([...holeB, ...community].map(toSolverCard));
+    const winners = Hand.winners([a, b]);
+    if (winners.length === 2)
+        return "TIE";
+    return winners[0] === a ? "A" : "B";
+}
 function resetStreetFlags() {
     state.actedThisStreet = { A: false, B: false };
     state.players.A.streetBet = 0;
@@ -103,12 +111,13 @@ function evalHoldem(hole, community) {
         rankValue: Number(solved.rank ?? 0),
     };
 }
-function compareHands(a, b) {
-    if (a.rankValue > b.rankValue)
-        return "A";
-    if (b.rankValue > a.rankValue)
-        return "B";
-    return "TIE";
+function compareHands(holeA, holeB, community) {
+    const a = Hand.solve([...holeA, ...community].map(toSolverCard));
+    const b = Hand.solve([...holeB, ...community].map(toSolverCard));
+    const winners = Hand.winners([a, b]);
+    if (winners.length === 2)
+        return "TIE";
+    return winners[0] === a ? "A" : "B";
 }
 // ===== 连接入座逻辑 =====
 export function assignSeat(token) {
@@ -199,7 +208,7 @@ export function makeView(forSeat) {
         state.players.B.hole.length === 2) {
         const aRes = evalHoldem(state.players.A.hole, state.community);
         const bRes = evalHoldem(state.players.B.hole, state.community);
-        const winner = compareHands(aRes, bRes);
+        const winner = winnerBySolver(state.players.A.hole, state.players.B.hole, state.community);
         view.showdown = {
             aHole: state.players.A.hole,
             bHole: state.players.B.hole,
@@ -273,7 +282,7 @@ export function tryStartGame() {
 function settleShowdown() {
     const aRes = evalHoldem(state.players.A.hole, state.community);
     const bRes = evalHoldem(state.players.B.hole, state.community);
-    const winner = compareHands(aRes, bRes);
+    const winner = winnerBySolver(state.players.A.hole, state.players.B.hole, state.community);
     // ✅ 修复：平分底池时奇数筹码给 BB（dealer 的对手）
     if (winner === "A") {
         state.players.A.stack += state.pot;
