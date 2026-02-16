@@ -1,4 +1,4 @@
-import type { Card, GameView, HandResult, Seat, ServerEvent } from "@poker/shared/dist/types.js";
+import type { Card, GameView, HandResult, Seat, ServerEvent, Stage } from "@poker/shared/dist/types.js";
 import { createInitialState, type GameState } from "./state.js";
 import { makeDeck, shuffle } from "./utils.js";
 
@@ -13,7 +13,9 @@ function other(seat: Seat): Seat {
   return seat === "A" ? "B" : "A";
 }
 
-function streetIsBetting(stage: string) {
+type BettingStage = "PREFLOP" | "FLOP" | "TURN" | "RIVER";
+
+function streetIsBetting(stage: Stage): stage is BettingStage {
   return stage === "PREFLOP" || stage === "FLOP" || stage === "TURN" || stage === "RIVER";
 }
 
@@ -159,34 +161,6 @@ export function setConnected(seat: Seat | null, connected: boolean) {
 export function makeView(forSeat: Seat | null): GameView {
   const youHole = forSeat ? state.players[forSeat].hole : [];
 
-  // 1) 先构造基础 view 对象（这里必须是纯 JSON 结构）
-  const view: GameView = {
-    you: { seat: forSeat },
-    stage: state.stage,
-    dealer: state.dealer,
-    community: state.community,
-    pot: state.pot,
-    players: {
-      A: {
-        seat: "A",
-        connected: state.players.A.connected,
-        stack: state.players.A.stack,
-        folded: state.players.A.folded,
-        ready: state.players.A.ready,
-      },
-      B: {
-        seat: "B",
-        connected: state.players.B.connected,
-        stack: state.players.B.stack,
-        folded: state.players.B.folded,
-        ready: state.players.B.ready,
-      }
-    },
-    yourHole: youHole,
-    oppHoleMask: ["XX", "XX"]
-  };
-
-  // 2) 再在对象外面计算下注视图，并挂到 view.betting 上
   const acting = state.acting;
   const sb = state.sb;
   const bb = state.bb;
@@ -224,21 +198,39 @@ export function makeView(forSeat: Seat | null): GameView {
     }
   }
 
-  // 注意：这里要求 shared/types.ts 里 GameView 已经加了 betting 字段
-  (view as any).betting = {
-    street: state.stage,
+  // 先构造除 betting 外的字段
+  const view: Omit<GameView, "betting"> = {
+    you: { seat: forSeat },
+    stage: state.stage,
+    dealer: state.dealer,
+    community: state.community,
     pot: state.pot,
-    currentBet: state.currentBet,
-    yourInvested,
-    oppInvested,
-    actingSeat: acting,
-    allowed,
-    sb,
-    bb,
+    players: {
+      A: {
+        seat: "A",
+        connected: state.players.A.connected,
+        stack: state.players.A.stack,
+        folded: state.players.A.folded,
+        ready: state.players.A.ready,
+      },
+      B: {
+        seat: "B",
+        connected: state.players.B.connected,
+        stack: state.players.B.stack,
+        folded: state.players.B.folded,
+        ready: state.players.B.ready,
+      },
+    },
+    yourHole: youHole,
+    oppHoleMask: ["XX", "XX"],
   };
 
-  // 3) SHOWDOWN 信息（保留你原来的）
-  if (state.stage === "SHOWDOWN" && state.players.A.hole.length === 2 && state.players.B.hole.length === 2) {
+  // SHOWDOWN 信息（保留你原来的）
+  if (
+    state.stage === "SHOWDOWN" &&
+    state.players.A.hole.length === 2 &&
+    state.players.B.hole.length === 2
+  ) {
     const aRes = evalHoldem(state.players.A.hole, state.community);
     const bRes = evalHoldem(state.players.B.hole, state.community);
     const winner = compareHands(aRes, bRes);
@@ -247,7 +239,7 @@ export function makeView(forSeat: Seat | null): GameView {
       bHole: state.players.B.hole,
       aResult: aRes,
       bResult: bRes,
-      winner
+      winner,
     };
   }
 
@@ -256,8 +248,23 @@ export function makeView(forSeat: Seat | null): GameView {
     view.message = `等待两人READY（当前 ${readyCount}/2）`;
   }
 
-  return view;
+  // 最后一次性返回完整 GameView（补上 betting）
+  return {
+    ...view,
+    betting: {
+      street: state.stage,
+      pot: state.pot,
+      currentBet: state.currentBet,
+      yourInvested,
+      oppInvested,
+      actingSeat: acting,
+      allowed,
+      sb,
+      bb,
+    },
+  };
 }
+
 
 export function broadcast(io: { emit: (event: string, payload: ServerEvent) => void }) {
   io.emit("server:event", { type: "VIEW", view: makeView(null) }); // 给观战/第三人也能看
@@ -462,7 +469,9 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
     if (bettingRoundComplete()) {
       // 如果两人都all-in，自动跑到摊牌
       if (state.players.A.allIn && state.players.B.allIn) {
-        while (state.stage !== "SHOWDOWN") advanceStreet();
+        while ((state.stage as Stage) !== "SHOWDOWN") {
+          advanceStreet();
+        }
       } else {
         advanceStreet();
       }
@@ -590,7 +599,9 @@ export function handleAction(seat: Seat | null, action: { type: string; [k: stri
         if (bettingRoundComplete()) {
           // 两人 all-in 就自动跑完公共牌到 SHOWDOWN
           if (state.players.A.allIn && state.players.B.allIn) {
-            while (state.stage !== "SHOWDOWN") advanceStreet();
+            while ((state.stage as Stage) !== "SHOWDOWN") {
+              advanceStreet();
+            }
           } else {
             advanceStreet();
           }
