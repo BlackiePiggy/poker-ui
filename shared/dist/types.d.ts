@@ -71,6 +71,8 @@ export type ServerWelcome = {
 export type ClientAction = {
     type: "READY";
 } | {
+    type: "RESTART_HAND";
+} | {
     type: "NEXT";
 } | {
     type: "FOLD";

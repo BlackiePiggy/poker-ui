@@ -91,6 +91,7 @@ export type ServerWelcome = {
 
 export type ClientAction =
   | { type: "READY" }
+  | { type: "RESTART_HAND" } // ✅ 新增：重新开始一把（筹码不变）
   | { type: "NEXT" } // MVP：手动推进阶段（你可以换成服务器自动）
   | { type: "FOLD" }
   | { type: "CHECK" }

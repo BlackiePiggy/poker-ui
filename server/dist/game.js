@@ -366,6 +366,21 @@ export function handleAction(seat, action) {
         state.players[seat].ready = false;
         return null;
     }
+    if (action.type === "RESTART_HAND") {
+        // 允许任意阶段一键重开，但筹码不变
+        state.stage = "WAITING";
+        state.acting = null;
+        // 清理本局牌面/下注/弃牌等（但不动 stack/token/connected）
+        resetHand();
+        resetStreetFlags();
+        // 让两人重新 READY 更清晰
+        state.players.A.ready = false;
+        state.players.B.ready = false;
+        // 可选：按钮轮换你想不想变？
+        // 如果你希望“重开不换按钮”，就注释掉下一行
+        // state.dealer = state.dealer ? other(state.dealer) : "A";
+        return null;
+    }
     // ✅ 再处理下注动作（这些才需要下注阶段校验）
     if (!streetIsBetting(state.stage)) {
         return { type: "ERROR", message: "当前不在下注阶段" };

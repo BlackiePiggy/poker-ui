@@ -1,5 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { Card } from "./Card";
+import { sendAction } from "../socket";
 export function Table({ view }) {
     const showdown = view.showdown;
     const betting = view.betting;
@@ -67,7 +68,16 @@ export function Table({ view }) {
                         color: "#fff",
                         textShadow: "0 2px 8px rgba(0,0,0,0.35)",
                         pointerEvents: "none",
-                    }, children: [_jsx("div", { style: { fontWeight: 900, letterSpacing: 0.3 }, children: "Heads-Up \u5FB7\u5DDE\uFF08\u5355\u623F\u95F4\uFF09" }), _jsxs("div", { style: { opacity: 0.95 }, children: ["Stage: ", _jsx("b", { children: view.stage })] })] }), view.message && (_jsx("div", { style: {
+                    }, children: [_jsx("div", { style: { fontWeight: 900, letterSpacing: 0.3 }, children: "Heads-Up \u5FB7\u5DDE\uFF08\u5355\u623F\u95F4\uFF09" }), _jsxs("div", { style: { opacity: 0.95, display: "flex", gap: 10, alignItems: "center" }, children: [_jsxs("div", { children: ["Stage: ", _jsx("b", { children: view.stage })] }), view.you.seat && (_jsx("button", { style: {
+                                        pointerEvents: "auto", // ✅ 必须，否则点不到（因为父级是 none）
+                                        padding: "6px 10px",
+                                        borderRadius: 10,
+                                        border: "1px solid rgba(255,255,255,0.25)",
+                                        background: "rgba(0,0,0,0.35)",
+                                        color: "#fff",
+                                        fontWeight: 800,
+                                        cursor: "pointer",
+                                    }, onClick: () => sendAction({ type: "RESTART_HAND" }), children: "\u91CD\u65B0\u5F00\u59CB" }))] })] }), view.message && (_jsx("div", { style: {
                         position: "absolute",
                         top: 46,
                         left: 18,

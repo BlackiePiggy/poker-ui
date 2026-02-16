@@ -1,6 +1,7 @@
 import React from "react";
 import { Card } from "./Card";
 import type { GameView, Card as CardT } from "@poker/shared/dist/types.js";
+import { sendAction } from "../socket";
 
 export function Table({ view }: { view: GameView }) {
   const showdown = view.showdown;
@@ -142,8 +143,29 @@ export function Table({ view }: { view: GameView }) {
           <div style={{ fontWeight: 900, letterSpacing: 0.3 }}>
             Heads-Up 德州（单房间）
           </div>
-          <div style={{ opacity: 0.95 }}>
-            Stage: <b>{view.stage}</b>
+          <div style={{ opacity: 0.95, display: "flex", gap: 10, alignItems: "center" }}>
+            <div>
+              Stage: <b>{view.stage}</b>
+            </div>
+
+            {/* ✅ 只有坐下的玩家才显示按钮（观战不显示） */}
+            {view.you.seat && (
+              <button
+                style={{
+                  pointerEvents: "auto", // ✅ 必须，否则点不到（因为父级是 none）
+                  padding: "6px 10px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  background: "rgba(0,0,0,0.35)",
+                  color: "#fff",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+                onClick={() => sendAction({ type: "RESTART_HAND" })}
+              >
+                重新开始
+              </button>
+            )}
           </div>
         </div>
 
